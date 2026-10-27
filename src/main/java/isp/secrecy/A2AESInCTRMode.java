@@ -46,7 +46,6 @@ public class A2AESInCTRMode {
                     final byte[] dt = decrypt(key, received);
                     print("%s%n", new String(dt, StandardCharsets.UTF_8));
                 }
-
             }
         });
 
@@ -68,8 +67,6 @@ public class A2AESInCTRMode {
                     final byte[] encryptedMsg = encrypt(key, pt);
                     send("alice", encryptedMsg);
                 }
-
-
             }
         });
 
