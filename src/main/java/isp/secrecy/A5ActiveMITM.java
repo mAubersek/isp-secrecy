@@ -1,7 +1,9 @@
 package isp.secrecy;
 
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.Key;
+import java.util.Arrays;
 
 import javax.crypto.Cipher;
 import javax.crypto.KeyGenerator;
@@ -17,16 +19,16 @@ import fri.isp.Environment;
  * The setting. Teaching assistant David wants to send a highly confidential email to professor
  * Denis, most likely containing questions for the upcoming exam. Needless to say, you are very
  * interested in seeing the contents of that email. Luckily, a few things go your way.
- * 
+ *
  * First, David has no Internet connectivity, but your mobile phone does. So you kindly offer to
  * set up a mobile hotspot through which David will be able to connect to an FMTP server. (You get
  * to play the role of the man-in-the-middle!)
- * 
+ *
  * FMTP is a new kind of a mail protocol; it stands for Funny Mail Transfer Protocol, and it is a
  * simple text-based protocol. The first line denotes the email of the recipient, the second line
  * the email of the sender, the third line the subject of the email, then we have an empty line and
  * finally we have the email contents.
- * 
+ *
  * All that David's mail client has to do to send an email, is to deliver a string like the
  * following to the FMTP server.
  * 
@@ -92,15 +94,23 @@ public class A5ActiveMITM {
 
         env.add(new Agent("student") {
             @Override
-            public void task() throws Exception {
+            public void task() {
                 final byte[] bytes = receive("david");
                 final byte[] iv = receive("david");
                 print(" IN: %s", hex(bytes));
 
-                // As the person-in-the-middle, modify the ciphertext
-                // so that the FMTP server will send the email to you
-                // (Needless to say, you are not allowed to use the key
-                // that is being used by david and server.)
+                byte[] knownPt = "prf.denis@fri.si".getBytes(StandardCharsets.UTF_8);
+                byte[] recipientCt = Arrays.copyOfRange(bytes, 0, knownPt.length);
+
+                byte[] keystream = new byte[knownPt.length];
+                for (int i = 0; i < knownPt.length; i++) {
+                    keystream[i] = (byte) (knownPt[i] ^ recipientCt[i]);
+                }
+
+                byte[] newRecipient = "isp@gmail.com   ".getBytes(StandardCharsets.UTF_8);
+                for (int i = 0; i < knownPt.length; i++) {
+                    bytes[i] = (byte) (keystream[i] ^ newRecipient[i]);
+                }
 
                 print("OUT: %s", hex(bytes));
                 send("server", bytes);
