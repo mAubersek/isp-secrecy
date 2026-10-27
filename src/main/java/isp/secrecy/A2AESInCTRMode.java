@@ -3,7 +3,11 @@ package isp.secrecy;
 import fri.isp.Agent;
 import fri.isp.Environment;
 
+import javax.crypto.Cipher;
 import javax.crypto.KeyGenerator;
+import javax.crypto.spec.IvParameterSpec;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.security.Key;
 
 /**
@@ -19,46 +23,82 @@ import java.security.Key;
  */
 public class A2AESInCTRMode {
     public static void main(String[] args) throws Exception {
-        // STEP 1: Alice and Bob beforehand agree upon a cipher algorithm and a shared secret key
-        // Both agents can access this shared key from the enclosing method
+
         final Key key = KeyGenerator.getInstance("AES").generateKey();
 
-        // STEP 2: Setup communication
         final Environment env = new Environment();
 
         env.add(new Agent("alice") {
             @Override
             public void task() throws Exception {
                 final String message = "I love you Bob. Kisses, Alice.";
-                /* TODO STEP 3:
-                 * Alice creates, encrypts and sends a message to Bob. Bob replies to the message.
-                 * Repeat for ten request-reply rounds.
-                 *
-                 * Use a fresh IV for every encryption, including Bob's replies.
-                 * Counter blocks must never repeat under this shared key, in either direction;
-                 * the counter ranges used by different messages must not overlap.
-                 * Send the IV along with the ciphertext; it need not be secret.
-                 * A cipher-generated IV can be accessed via cipher.getIV().
-                 */
+                final byte[] pt = message.getBytes(StandardCharsets.UTF_8);
+
+
+                for (int i = 0; i < 10; i++) {
+                    // Sends a msg
+                    final byte[] encryptedMsg = encrypt(key, pt);
+                    send("bob", encryptedMsg);
+
+                    // Receives a msg
+                    final byte[] received = receive("bob");
+
+                    final byte[] dt = decrypt(key, received);
+                    print("%s%n", new String(dt, StandardCharsets.UTF_8));
+                }
+
             }
         });
 
         env.add(new Agent("bob") {
             @Override
             public void task() throws Exception {
-                /* TODO STEP 4
-                 * Bob receives, decrypts and displays a message.
-                 * Wrap the received IV bytes in IvParameterSpec for the init() call:
-                 *
-                 *   IvParameterSpec ivSpec = new IvParameterSpec(iv);
-                 *   aes.init(Cipher.DECRYPT_MODE, key, ivSpec);
-                 *
-                 * Encrypt and send a reply using a fresh IV in each round.
-                 */
+
+                final String message = "Alice, take a chill pill.";
+                final byte[] pt = message.getBytes(StandardCharsets.UTF_8);
+
+                for (int i = 0; i < 10; i++) {
+                    // Receive a msg
+                    final byte[] received = receive("alice");
+
+                    final byte[] dt = decrypt(key, received);
+                    print("%s%n", new String(dt, StandardCharsets.UTF_8));
+
+                    // Send a msg
+                    final byte[] encryptedMsg = encrypt(key, pt);
+                    send("alice", encryptedMsg);
+                }
+
+
             }
         });
 
         env.connect("alice", "bob");
         env.start();
+    }
+
+    private static byte[] encrypt(Key key, byte[] pt) throws Exception {
+        final Cipher encrypt = Cipher.getInstance("AES/CTR/NoPadding");
+        encrypt.init(Cipher.ENCRYPT_MODE, key); // java generates iv
+        final byte[] ct = encrypt.doFinal(pt);
+        final byte[] iv = encrypt.getIV();
+
+        return ByteBuffer.allocate(iv.length + ct.length).put(iv).put(ct).array();
+    }
+
+    private static byte[] decrypt(Key key, byte[] received) throws Exception {
+        ByteBuffer buf = ByteBuffer.wrap(received);
+
+        byte[] iv = new byte[16];
+        buf.get(iv);
+
+        byte[] ct = new byte[buf.remaining()];
+        buf.get(ct);
+
+        System.out.printf("IV=%s CT=%s%n", Agent.hex(iv), Agent.hex(ct));
+
+        final Cipher decrypt = Cipher.getInstance("AES/CTR/NoPadding");
+        decrypt.init(Cipher.DECRYPT_MODE, key, new IvParameterSpec(iv));
+        return decrypt.doFinal(ct);
     }
 }
