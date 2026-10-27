@@ -2,8 +2,8 @@ package isp.secrecy;
 
 import fri.isp.Agent;
 
+import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;
-import javax.crypto.KeyGenerator;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -60,15 +60,28 @@ public class A4ExhaustiveSearch {
         final Cipher decrypt = Cipher.getInstance("DES/ECB/PKCS5Padding");
         decrypt.init(Cipher.DECRYPT_MODE, key);
         final byte[] ptTest = decrypt.doFinal(ct);
-        System.out.println(new String(ptTest, StandardCharsets.UTF_8));
+        // System.out.println(new String(ptTest, StandardCharsets.UTF_8));
+        if (Arrays.equals(ptTest, pt)) {
+            System.out.printf("Generated key: %s%n", Agent.hex(k));
+        } else {
+            System.out.println("Generated key fails");
+        }
 
         byte[] bfk = bruteForceKey(ct, message);
+        if (bfk == null) {
+            System.out.println("Key not found");
+            return;
+        }
 
         // prove that bfk also decrypts
         decrypt.init(Cipher.DECRYPT_MODE,  new SecretKeySpec(bfk, "DES"));
         final byte[] bfkPt = decrypt.doFinal(ct);
-        System.out.println(new String(bfkPt, StandardCharsets.UTF_8));
-
+        System.out.printf("[DECIPHERED MESSAGE]: %s%n", new String(bfkPt, StandardCharsets.UTF_8));
+        if (Arrays.equals(bfkPt, pt)) {
+            System.out.println("Brute force returns OK key");
+        } else {
+            System.out.println("Brute force key fails");
+        }
     }
 
     /**
@@ -77,28 +90,30 @@ public class A4ExhaustiveSearch {
      */
     public static byte[] bruteForceKey(byte[] ct, String message) throws Exception {
         final byte[] pt = message.getBytes(StandardCharsets.UTF_8);
-        System.out.println(Agent.hex(pt));
-        System.out.println(Agent.hex(ct));
+        final byte[] ptFirstBlock = Arrays.copyOfRange(pt, 0, 8);
 
         ByteBuffer bb = ByteBuffer.allocate(8);
-        final Cipher decrypt = Cipher.getInstance("DES/ECB/PKCS5Padding");
+        final Cipher decrypt = Cipher.getInstance("DES/ECB/NoPadding");
+        final Cipher decryptFinal = Cipher.getInstance("DES/ECB/PKCS5Padding");
 
         for (int i = 0; i < 1 << 24; i++) {
             bb.putInt(4, i);
-
             Key key = new SecretKeySpec(bb.array(), "DES");
 
-            try {
-                decrypt.init(Cipher.DECRYPT_MODE, key);
-                byte[] dt = decrypt.doFinal(ct);
-                if (Arrays.equals(dt, pt)) {
-                    System.out.println("Found a key");
-                    System.out.println(Agent.hex(bb.array()));
+            decrypt.init(Cipher.DECRYPT_MODE, key);
+            byte[] dtFirstBlock = decrypt.doFinal(ct, 0, 8);
 
-                    return bb.array();
-                }
-            } catch (Exception ignored) {}
+            if (Arrays.equals(dtFirstBlock, ptFirstBlock)) {
+                try {
+                    decryptFinal.init(Cipher.DECRYPT_MODE, key);
+                    byte[] fullDt = decryptFinal.doFinal(ct);
 
+                    if (Arrays.equals(fullDt, pt)) {
+                        System.out.printf("Found a key: %s %n", Agent.hex(bb.array()));
+                        return bb.array();
+                    }
+                } catch (BadPaddingException ignored) {}
+            }
         }
         return null;
     }
