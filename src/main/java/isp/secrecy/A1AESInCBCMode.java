@@ -3,8 +3,13 @@ package isp.secrecy;
 import fri.isp.Agent;
 import fri.isp.Environment;
 
+import javax.crypto.Cipher;
 import javax.crypto.KeyGenerator;
+import javax.crypto.spec.IvParameterSpec;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.security.Key;
+import java.util.Arrays;
 
 /**
  * TASK:
@@ -30,33 +35,77 @@ public class A1AESInCBCMode {
             @Override
             public void task() throws Exception {
                 final String message = "I love you Bob. Kisses, Alice.";
-                /* TODO STEP 3:
-                 * Alice creates, encrypts and sends a message to Bob. Bob replies to the message.
-                 * Repeat for ten request-reply rounds.
-                 *
-                 * Use a fresh, unpredictable IV for every encryption, including Bob's replies.
-                 * Send the IV along with the ciphertext; it need not be secret.
-                 * A cipher-generated IV can be accessed via cipher.getIV().
-                 */
+                final byte[] pt = message.getBytes(StandardCharsets.UTF_8);
+
+
+                for (int i = 0; i < 10; i++) {
+                    // Sends a msg
+                    final byte[] encryptedMsg = encrypt(key, pt);
+                    send("bob", encryptedMsg);
+
+                    // Receives a msg
+                    final byte[] received = receive("bob");
+
+                    final byte[] dt = decrypt(key, received);
+                    print("IV=%s CT=%s%n%s",
+                            hex(Arrays.copyOfRange(received, 0, 16)),
+                            hex(Arrays.copyOfRange(received, 16, received.length)),
+                            new String(dt, StandardCharsets.UTF_8));
+                }
+
             }
         });
 
         env.add(new Agent("bob") {
             @Override
             public void task() throws Exception {
-                /* TODO STEP 4
-                 * Bob receives, decrypts and displays a message.
-                 * Wrap the received IV bytes in IvParameterSpec for the init() call:
-                 *
-                 *   IvParameterSpec ivSpec = new IvParameterSpec(iv);
-                 *   aes.init(Cipher.DECRYPT_MODE, key, ivSpec);
-                 *
-                 * Encrypt and send a reply using a fresh IV in each round.
-                 */
+
+                final String message = "Alice, take a chill pill.";
+                final byte[] pt = message.getBytes(StandardCharsets.UTF_8);
+
+                for (int i = 0; i < 10; i++) {
+                    // Receive a msg
+                    final byte[] received = receive("alice");
+
+                    final byte[] dt = decrypt(key, received);
+                    print("IV=%s CT=%s%n%s",
+                            hex(Arrays.copyOfRange(received, 0, 16)),
+                            hex(Arrays.copyOfRange(received, 16, received.length)),
+                            new String(dt, StandardCharsets.UTF_8));
+
+                    // Send a msg
+                    final byte[] encryptedMsg = encrypt(key, pt);
+                    send("alice", encryptedMsg);
+                }
+
+
             }
         });
 
         env.connect("alice", "bob");
         env.start();
+    }
+
+    private static byte[] encrypt(Key key, byte[] pt) throws Exception {
+        final Cipher encrypt = Cipher.getInstance("AES/CBC/PKCS5Padding");
+        encrypt.init(Cipher.ENCRYPT_MODE, key); // java generates iv
+        final byte[] ct = encrypt.doFinal(pt);
+        final byte[] iv = encrypt.getIV();
+
+        return ByteBuffer.allocate(iv.length + ct.length).put(iv).put(ct).array();
+    }
+
+    private static byte[] decrypt(Key key, byte[] received) throws Exception {
+        ByteBuffer buf = ByteBuffer.wrap(received);
+
+        byte[] iv = new byte[16];
+        buf.get(iv);
+
+        byte[] ct = new byte[buf.remaining()];
+        buf.get(ct);
+
+        final Cipher decrypt = Cipher.getInstance("AES/CBC/PKCS5Padding");
+        decrypt.init(Cipher.DECRYPT_MODE, key, new IvParameterSpec(iv));
+        return decrypt.doFinal(ct);
     }
 }

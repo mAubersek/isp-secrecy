@@ -5,6 +5,7 @@ import java.security.Key;
 
 import javax.crypto.Cipher;
 import javax.crypto.KeyGenerator;
+import javax.crypto.spec.IvParameterSpec;
 
 import fri.isp.Agent;
 
@@ -26,17 +27,19 @@ public class SymmetricCipherExample {
         System.out.println("[MESSAGE] " + message);
 
         // STEP 1: Alice and Bob agree upon a cipher and a shared secret key
-        final Key key = KeyGenerator.getInstance("RC4").generateKey();
+        final Key key = KeyGenerator.getInstance("AES").generateKey();
 
         final byte[] pt = message.getBytes(StandardCharsets.UTF_8);
         System.out.println("[PT] " + Agent.hex(pt));
 
         //  STEP 2: Create a cipher, encrypt the PT and, optionally, extract cipher parameters (such as IV)
-        final Cipher encrypt = Cipher.getInstance("RC4");
-        encrypt.init(Cipher.ENCRYPT_MODE, key);
+        final Cipher encrypt = Cipher.getInstance("AES/CBC/PKCS5Padding");
+        encrypt.init(Cipher.ENCRYPT_MODE, key); // iv should be a parameter - java will generate a secure iv
         final byte[] cipherText = encrypt.doFinal(pt);
+        final byte[] iv = encrypt.getIV();
 
         // STEP 3: Print out cipher text (in HEX) [this is what an attacker would see]
+        System.out.println("[IV] " + Agent.hex(iv));
         System.out.println("[CT] " + Agent.hex(cipherText));
 
         /*
@@ -44,8 +47,8 @@ public class SymmetricCipherExample {
          * The receiver creates a Cipher object, defines the algorithm, the secret key and
          * possibly additional parameters (such as IV), and then decrypts the cipher text
          */
-        final Cipher decrypt = Cipher.getInstance("RC4");
-        decrypt.init(Cipher.DECRYPT_MODE, key);
+        final Cipher decrypt = Cipher.getInstance("AES/CBC/PKCS5Padding");
+        decrypt.init(Cipher.DECRYPT_MODE, key, new IvParameterSpec(iv));
         final byte[] dt = decrypt.doFinal(cipherText);
         System.out.println("[PT] " + Agent.hex(dt));
 
