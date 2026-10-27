@@ -9,7 +9,6 @@ import javax.crypto.spec.IvParameterSpec;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.Key;
-import java.util.Arrays;
 
 /**
  * TASK:
@@ -47,10 +46,7 @@ public class A1AESInCBCMode {
                     final byte[] received = receive("bob");
 
                     final byte[] dt = decrypt(key, received);
-                    print("IV=%s CT=%s%n%s",
-                            hex(Arrays.copyOfRange(received, 0, 16)),
-                            hex(Arrays.copyOfRange(received, 16, received.length)),
-                            new String(dt, StandardCharsets.UTF_8));
+                    print("%s%n", new String(dt, StandardCharsets.UTF_8));
                 }
 
             }
@@ -68,10 +64,7 @@ public class A1AESInCBCMode {
                     final byte[] received = receive("alice");
 
                     final byte[] dt = decrypt(key, received);
-                    print("IV=%s CT=%s%n%s",
-                            hex(Arrays.copyOfRange(received, 0, 16)),
-                            hex(Arrays.copyOfRange(received, 16, received.length)),
-                            new String(dt, StandardCharsets.UTF_8));
+                    print("%s%n", new String(dt, StandardCharsets.UTF_8));
 
                     // Send a msg
                     final byte[] encryptedMsg = encrypt(key, pt);
@@ -103,6 +96,8 @@ public class A1AESInCBCMode {
 
         byte[] ct = new byte[buf.remaining()];
         buf.get(ct);
+
+        System.out.printf("IV=%s CT=%s%n", Agent.hex(iv), Agent.hex(ct));
 
         final Cipher decrypt = Cipher.getInstance("AES/CBC/PKCS5Padding");
         decrypt.init(Cipher.DECRYPT_MODE, key, new IvParameterSpec(iv));
