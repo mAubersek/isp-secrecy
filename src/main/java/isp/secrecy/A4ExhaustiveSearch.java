@@ -1,5 +1,16 @@
 package isp.secrecy;
 
+import fri.isp.Agent;
+
+import javax.crypto.Cipher;
+import javax.crypto.KeyGenerator;
+import javax.crypto.spec.SecretKeySpec;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.security.Key;
+import java.security.SecureRandom;
+import java.util.Arrays;
+
 /**
  * Implement a brute force key search (exhaustive key search) if you know that the
  * message is:
@@ -24,11 +35,40 @@ package isp.secrecy;
  * To manually specify a key, use {@link javax.crypto.spec.SecretKeySpec}.
  */
 public class A4ExhaustiveSearch {
+
+    private static final SecureRandom RNG = new SecureRandom();
+
     public static void main(String[] args) throws Exception {
+
         final String message = "I would like to keep this text confidential Bob. Kind regards, Alice.";
         System.out.println("[MESSAGE] " + message);
 
-        // TODO
+        final byte[] pt = message.getBytes(StandardCharsets.UTF_8);
+
+        // generate key
+        final byte[] lastThree = new byte[3];
+        RNG.nextBytes(lastThree);
+        final byte[] k = ByteBuffer.allocate(8).put(new byte[5]).put(lastThree).array();
+        final Key key = new SecretKeySpec(k, "DES");
+
+        // encryption
+        final Cipher encrypt = Cipher.getInstance("DES/ECB/PKCS5Padding");
+        encrypt.init(Cipher.ENCRYPT_MODE, key);
+        final byte[] ct = encrypt.doFinal(pt);
+
+        // check that the key decrypts
+        final Cipher decrypt = Cipher.getInstance("DES/ECB/PKCS5Padding");
+        decrypt.init(Cipher.DECRYPT_MODE, key);
+        final byte[] ptTest = decrypt.doFinal(ct);
+        System.out.println(new String(ptTest, StandardCharsets.UTF_8));
+
+        byte[] bfk = bruteForceKey(ct, message);
+
+        // prove that bfk also decrypts
+        decrypt.init(Cipher.DECRYPT_MODE,  new SecretKeySpec(bfk, "DES"));
+        final byte[] bfkPt = decrypt.doFinal(ct);
+        System.out.println(new String(bfkPt, StandardCharsets.UTF_8));
+
     }
 
     /**
@@ -36,8 +76,30 @@ public class A4ExhaustiveSearch {
      * Return null if no matching key exists within the restricted search space.
      */
     public static byte[] bruteForceKey(byte[] ct, String message) throws Exception {
-        // TODO
+        final byte[] pt = message.getBytes(StandardCharsets.UTF_8);
+        System.out.println(Agent.hex(pt));
+        System.out.println(Agent.hex(ct));
 
+        ByteBuffer bb = ByteBuffer.allocate(8);
+        final Cipher decrypt = Cipher.getInstance("DES/ECB/PKCS5Padding");
+
+        for (int i = 0; i < 1 << 24; i++) {
+            bb.putInt(4, i);
+
+            Key key = new SecretKeySpec(bb.array(), "DES");
+
+            try {
+                decrypt.init(Cipher.DECRYPT_MODE, key);
+                byte[] dt = decrypt.doFinal(ct);
+                if (Arrays.equals(dt, pt)) {
+                    System.out.println("Found a key");
+                    System.out.println(Agent.hex(bb.array()));
+
+                    return bb.array();
+                }
+            } catch (Exception ignored) {}
+
+        }
         return null;
     }
 }
